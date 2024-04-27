@@ -1,0 +1,66 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    df_print: paged
+  md_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(rjson)
+library(stringr)
+library(tidyjson)
+library(tidytext)
+
+```
+
+```{r read, echo=FALSE}
+margin_raw_df <-
+  fromJSON(file = "margin.json")  %>%
+  spread_values(
+    symbol = jstring(contract, m_contract, m_symbol),
+    side = jstring(order,m_action),
+    tradingClass = jstring(contract, m_contract, m_tradingClass),
+    price = jnumber(price),
+    initMargin = jstring(orderState,m_initMarginChange),
+    maintMargin = jstring(orderState,m_maintMarginChange),
+    equity = jstring(orderState,m_equityWithLoanBefore),
+    liquidHours = jstring(contract, m_liquidHours)
+  ) %>%
+  as_tibble() 
+next_day_df <- margin_raw_df %>% select(liquidHours) %>%
+  unnest_tokens(word, liquidHours, token = stringr::str_split, pattern = ";") %>%
+  filter(!str_detect(word,'closed')) %>%
+  filter(row_number()==1)
+
+margin_df <- margin_raw_df %>%
+  mutate(initMargin=as.numeric(initMargin),
+         ipct=initMargin/price,
+         equity=as.numeric(equity),
+         liquidHours = next_day_df$word) %>%
+  select(-document.id)
+
+```
+
+```{r check_work}
+margin_raw_df
+margin_df %>% select(-c(equity,maintMargin))
+
+margin_df <- margin_df %>% 
+  group_by(symbol) %>%
+  group_modify(~{
+    .x %>% slice_max(ipct) %>% slice_head(n=1)
+  }) %>% ungroup()
+
+margin_df %>% select(-c(equity,maintMargin))
+save(margin_df,file='margin.rda')
+
+```

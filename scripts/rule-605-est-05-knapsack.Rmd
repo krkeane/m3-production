@@ -1,0 +1,192 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  md_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(rjson)
+library(stringr)
+library(tidyjson)
+library(tidyr)
+library(adagio)
+```
+
+```{r read, echo=FALSE}
+load('trades.rda')
+load('margin.rda')
+
+
+n_avg_units <- 2
+min_comm <- .35
+comm_per_shr <- .0015 # .002 # .001  
+min_visible_size <- 100
+min_trade_qty <- ceiling(min_comm / comm_per_shr) + min_visible_size
+
+today_df <- rank_df %>%
+  inner_join(margin_df, by = 'symbol') %>%
+   # filter(symbol!="SMCI") %>%
+  mutate(
+    pos_limit = n_avg_units * round(avgshr)+99,
+    margin = pos_limit * price * ipct / 100,
+    adjval = value / margin,
+    trading = 'on'
+  ) %>%
+  arrange(-adjval) %>%
+  arrange(-value) %>%
+  filter(margin>0,value>0)
+
+usage <- 0
+equity <- today_df$equity[[1]]
+
+```
+```{r solve, echo=FALSE, results='hide'}
+# (is <- mknapsack(w=today_df$margin,p=today_df$value,cap=equity))
+# which(is$ksack == 1)
+# 
+# today_df <- today_df[sample(nrow(today_df)),]
+# (is <- mknapsack(w=today_df$margin,p=today_df$value,cap=equity))
+# which(is$ksack == 1)
+
+today_df <- today_df %>% arrange(-adjval)
+(is <- mknapsack(w=today_df$margin,p=today_df$value,cap=equity))
+which(is$ksack == 1)
+
+```
+\newpage
+```{r report, echo=FALSE}
+today_df <- bind_cols(today_df,tibble(ksack=is$ksack)) %>%
+  arrange(-value) 
+# %>% 
+#   mutate(
+#     pos_limit = pmax(min_trade_qty, round(n_avg_units * avgshr)),
+#     margin = pos_limit * price * ipct / 100,
+#     adjval = value / margin,
+#     trading = 'on'
+#   ) 
+
+today_df %>%
+  select(
+    symbol,
+    sd_sprd,
+    price,
+    avgshr,
+    pos_limit,
+    ipct,
+    margin,
+    value,
+    rank
+  ) 
+
+today_df <- today_df %>%
+  filter(ksack==1) %>%
+  mutate(usage = cumsum(margin)) %>%
+  select(
+    symbol,
+    sd_sprd,
+    price,
+    avgshr,
+    pos_limit,
+    ipct,
+    trading,
+    margin,
+    usage,
+    value,
+    adjval,
+    rank
+  ) 
+
+var_df <- today_df %>%
+  mutate(usd_limit = pos_limit*price,
+         var = (2*usd_limit)^2/12) %>%
+  select(symbol,pos_limit,price,usd_limit,var) %>%
+  summarise(usd_limit=sum(usd_limit),var=sum(var),stddev=sqrt(var),
+            p90_limit=qnorm(.90)*stddev,
+            p95_limit=qnorm(.95)*stddev,
+            p99_limit=qnorm(.99)*stddev
+            )
+var_df %>% 
+  select (p90_limit,p95_limit,p99_limit,usd_limit) %>%
+  kable(format.args = list(big.mark=','),digits=0)
+
+hours_df <- margin_df %>% distinct(liquidHours) %>%
+  mutate(sod=ymd_hm(word(liquidHours,1,sep='-'))+dminutes(10),
+         eod=ymd_hm(word(liquidHours,2,sep='-'))-dminutes(11),
+         day_str=sprintf('%04d%02d%02d',year(sod),month(sod),day(sod)),
+         sod_str=sprintf('+sod %02d:%02d:%02d',hour(sod),minute(sod),second(sod)),
+         eod_str=sprintf('+eod %02d:%02d:%02d',hour(eod),minute(eod),second(eod))
+         ) %>% select(-c(sod,eod))
+
+ctl_df <- tibble(
+  text = c(
+    sprintf('+system %.0f %.0f on',2*var_df$usd_limit,var_df$usd_limit),
+    hours_df$sod_str,
+    hours_df$eod_str,
+    sprintf('+mintrdqty %.0f', min_trade_qty)
+  )
+)
+
+```
+
+```{r calc, echo=FALSE, results='asis'}
+cat(sprintf('  \n### Equity %.0f\n',equity))
+cat(sprintf('  \n### Top market making stocks %s to %s',as.character(dates_df$min_date),as.character(dates_df$max_date)))
+# see https://www.interactivebrokers.com/en/pricing/commissions-stocks.php?re=amer
+
+today_df %>%
+  kable(digits = c(0,4,2,0,0,1,0,0,0,0,1,0),
+        format.args = list(big.mark = ','))
+
+today_df %>%
+  summarise(value=sum(value)) %>% kable(digits = 0, format.args = list(big.mark=','))
+
+cmdLine_df <- today_df %>%
+  mutate(,clientId=1:n()+1000,cmd =  sprintf('%.0f %s %.0f', clientId, symbol, avgshr))
+cmdLine_df
+
+
+output <- bind_rows(
+  ctl_df,
+  bind_rows(tibble(symbol='SPY',pos_limit=0,trading='off'),today_df) %>%
+    mutate(text = sprintf('%s %.0f %s', symbol, pos_limit, trading),
+           watch = sprintf('DES,%s,STK,SMART/AMEX,,,,,', symbol)) %>%
+    select(text, watch)
+) 
+
+ctl_fn <- sprintf('%s.ctl',hours_df$day_str)
+cmd_fn <- sprintf('%s.cmd',hours_df$day_str)
+watch_fn <- sprintf('%s.lst',hours_df$day_str)
+write(cmdLine_df$cmd,file=cmd_fn)
+write(output$text,file=ctl_fn)
+output <- output %>% drop_na()
+write(output$watch,file=watch_fn)
+
+cat(sprintf('  \n\\newpage  \n### Command line args `%s`  \n',cmd_fn))
+```
+
+```{r comment='',echo=FALSE}
+cat(readLines(cmd_fn), sep = '\n')
+```
+```{r echo=FALSE,results='asis'}
+cat(sprintf('  \n\\newpage  \n### Control file `%s`  \n',ctl_fn))
+```
+
+```{r comment='',echo=FALSE}
+cat(readLines(ctl_fn), sep = '\n')
+```
+```{r echo=FALSE,results='asis'}
+cat(sprintf('  \n### Watch list `%s`  \n',watch_fn))
+```
+```{r comment='',echo=FALSE}
+cat(readLines(watch_fn), sep = '\n')
+```

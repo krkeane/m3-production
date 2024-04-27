@@ -1,0 +1,139 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(rjson)
+library(tidyjson)
+
+routing_ratio <- 0.65 # .65 from IBKR ATS rule 605 data for 11/2023
+```
+  
+
+```{r read, echo=FALSE}
+trade_df <-
+  fromJSON(file = "data-rule-605.json")  %>%
+  spread_values(
+    symbol = jstring(sr, symbol),
+    primary = jstring(sr, primary),
+    tradingClass = jstring(sr, tradingClass),
+    barField = jstring(sr, reqBar, whatToShow),
+    barSize =  jstring(sr, reqBar, barSizeSetting),
+    barTime = jstring(bar, m_time),
+    open = jnumber(bar, m_open),
+    high = jnumber(bar, m_high),
+    low = jnumber(bar, m_low),
+    close = jnumber(bar, m_close),
+    volume = jnumber(bar, m_volume),
+    count = jnumber(bar, m_count),
+    wap = jnumber(bar, m_wap)
+  ) %>%
+  as_tibble %>%
+  mutate(barTime = as_datetime(barTime), date = as_date(barTime)) %>%
+  select(-c(document.id, barField, barSize)) %>%
+  filter(tradingClass=='NMS' | tradingClass==symbol)
+
+```
+```{r trade_tbl, echo=FALSE, results='asis'}
+dates_df <- trade_df %>% summarise(min_date = as_date(min(barTime)),
+                                   max_date = as_date(max(barTime)))
+
+rank_df <- trade_df %>%
+  group_by(symbol) %>%
+  group_modify(~ {
+    .x %>% group_by(date) %>% mutate(diff = open - lag(close)) %>% ungroup() %>%
+      filter(!is.na(diff)) %>%
+      summarise(
+        var = var(diff) / 2,
+        sd_sprd = sqrt(var),
+        volume = sum(volume),
+        count = sum(count),
+        avgshr = volume / count,
+        close = last(close),
+        comm =
+          #  monthly volume 3,000,001 - 20,000,000
+          #.0015 +
+          pmax(0.35/avgshr,.0015) +
+          #  SEC Transaction Fee: USD 0.000008 * Value of Aggregate Sales
+          (close / 2 * 0.000008) +
+          #  FINRA Trading Activity Fee: USD 0.000145 * Quantity Sold
+          0.000145 +
+          #  NSCC, DTC Fees: USD 0.00020 per share6
+          0.00020,
+        value = volume * (sd_sprd*routing_ratio - comm) 
+      ) %>%
+      select(-var)
+  }) %>%
+  ungroup() %>%
+  #  arrange(-value/close) %>%
+  arrange(-value) %>%
+  mutate(rank = 1:n())
+
+rank_df %>%
+  filter(rank <= 20) %>%
+  # arrange(rank) %>%
+  mutate(score = value/close/avgshr ) %>%
+  arrange(-score) %>%
+  select(rank, symbol, avgshr, close, sd_sprd, comm, count, volume, value,score) %>%
+  kable(
+    col.names = c('','Symbol','Avg shares','Close','Obs sd','Comm','Count','Volume','Alpha','Score'),
+    caption = sprintf(
+      'Top market making stocks %s to %s',
+      as.character(dates_df$min_date),
+      as.character(dates_df$max_date)
+    ),
+    digits = c(rep(0, 3),2,rep(4, 2), rep(0,3),4),
+    format.args = list(big.mark = ',')
+  ) %>% print()
+
+rank_df %>%
+  filter(rank <= 20) %>%
+  # arrange(rank) %>%
+  mutate(score = value/close/avgshr ) %>%
+  arrange(-score) %>%
+  slice_head(n=11) %>%
+  arrange(symbol) %>%
+  select(rank, symbol, avgshr, close, sd_sprd, comm, count, volume, value,score) %>%
+  kable(
+    col.names = c('','Symbol','Avg shares','Close','Obs sd','Comm','Count','Volume','Alpha','Score'),
+    caption = sprintf(
+      'Top market making stocks %s to %s',
+      as.character(dates_df$min_date),
+      as.character(dates_df$max_date)
+    ),
+    digits = c(rep(0, 3),2,rep(4, 2), rep(0,3),4),
+    format.args = list(big.mark = ',')
+  ) %>% print()
+
+save(trade_df, rank_df, dates_df, routing_ratio, file = 'trades.rda')
+
+```
+
+\newpage
+```{r echo=FALSE, results='asis'}
+rank_df %>%
+  arrange(rank) %>%
+  select(rank, symbol, avgshr, close, sd_sprd, comm, count, volume, value) %>%
+  kable(
+    col.names = c('','Symbol','Avg shares','Close','Obs sd','Comm','Count','Volume','Alpha'),
+    caption = sprintf(
+      'Top market making stocks %s to %s',
+      as.character(dates_df$min_date),
+      as.character(dates_df$max_date)
+    ),
+    digits = c(rep(0, 3),2,rep(4, 2), rep(0,3)),
+    format.args = list(big.mark = ',')
+  ) %>% print()
+
+```
