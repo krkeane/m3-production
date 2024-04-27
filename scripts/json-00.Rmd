@@ -1,0 +1,40 @@
+---
+title: "SEC rule 605 file"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+rpt_digits <- 3
+```
+
+```{r load}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(ggplot2)
+
+load('rule605.rda')
+
+
+symbol_df <- data %>% 
+  filter(month==max(month)) %>%
+  mutate(month=ymd(sprintf('%s01',month)))%>%
+  group_by(symbol,month) %>%
+  summarise(cus_sprd = sum(filled*aes),
+            mkt_sprd = cus_sprd + sum(impr_shr*impr_amnt*2),
+            filled = sum(filled),
+            aes=cus_sprd/filled,
+            mes=mkt_sprd/filled, 
+            value = (aes/2 - .0035)*filled,
+            ratio=aes/mes, .groups = 'drop') %>%
+  slice_max(order_by=value,n=200) 
+
+symbol_df <- symbol_df %>% 
+  mutate(prefix = if_else(row_number()==1,'["',',"'),
+         suffix = if_else(row_number()==n(),'"]','"'),
+         text = sprintf('%s%s%s',prefix,symbol,suffix))
+write(symbol_df$text,file='ibkrats.json')
+```

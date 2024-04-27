@@ -1,0 +1,72 @@
+---
+title: "SEC rule 605 file"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+rpt_digits <- 3
+```
+
+```{r load}
+library(dplyr)
+library(janitor)
+library(readr)
+library(lubridate)
+library(tidyr)
+
+rule_605_cols <- c(
+  'f01', 'market', 'month', 'symbol', 'type', 'size', 'orders', 'shares',
+  'cxld', 'filled', 'away', 'f12', 'f13', 'f14', 'f15', 'f16', 'ars', 'aes',
+  'impr_shr', 'impr_amnt', 'impr_t', 'f22', 'f23', 'f24', 'f25', 'f26'
+)
+rule_605_col_drop <- c(
+  'market','cxld','ars','away','impr_t',
+  'f01','f12', 'f13', 'f14', 'f15', 'f16','f22', 'f23', 'f24', 'f25', 'f26'
+)
+
+
+read_month <- function(file_name) {
+  temp <- tempfile()
+  download.file(file_name, temp)
+  data <-
+    read_delim(
+      temp,
+      delim = '|',
+      col_names = rule_605_cols,
+      col_types = 'ccccccdddddddddddddddddddd_'
+    ) 
+  unlink(temp)
+  data %>% select(-all_of(rule_605_col_drop)) %>%
+    filter(filled>0, type %in% c('11','12','13')) %>%
+    drop_na()
+}
+
+
+year <- 2019:year(today())
+month <- 1:12
+dates <- tibble(year, fake = 'x') %>% 
+  inner_join(tibble(month, fake = 'x'), by = 'fake', 
+             relationship='many-to-many') %>% 
+  select(-fake) %>%
+  filter(year <= year(today()), month < month(today()) | 
+           year < year(today())) %>% 
+  mutate(dstr=sprintf('%04.0f%02.0f',year,month)) %>% 
+  arrange(dstr) %>% select(dstr)
+
+data <- dates %>% 
+  group_by(dstr) %>%
+  group_modify(~{
+    fn <- sprintf('https://www.interactivebrokers.com/iats605Reports/tiats%s.zip',.y$dstr)
+    df <- tibble()
+    try(df <- read_month(fn))
+    df
+  }) %>% ungroup() %>% select(-dstr)
+
+save(data,file='rule605.rda')
+
+data
+
+```
