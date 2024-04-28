@@ -2,3 +2,6 @@
 *.pdf
 *.rda
 *.html
+*.cmd
+*.ctl
+*.lst
