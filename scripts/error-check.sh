@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date=$(date +"%Y%m%d")
+date=$(date +"/opt/pkg/git/minimal-market-maker/%Y%m%d")
 
 toterr=$(grep error ${date}-*.log | wc | awk '{print $1;}')
 knownerr=$(grep -e " | 404 | " -e " | 104 | " -e " | 201 | " -e " | 202 | " ${date}-*.log | wc | awk '{print $1;}')
