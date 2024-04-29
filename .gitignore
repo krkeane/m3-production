@@ -5,3 +5,4 @@
 *.cmd
 *.ctl
 *.lst
+tmp.sh
