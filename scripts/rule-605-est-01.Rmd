@@ -29,6 +29,7 @@ margin_raw_df <-
     symbol = jstring(contract, m_contract, m_symbol),
     side = jstring(order,m_action),
     tradingClass = jstring(contract, m_contract, m_tradingClass),
+    stockType = jstring(contract,m_stockType),
     price = jnumber(price),
     initMargin = jstring(orderState,m_initMarginChange),
     maintMargin = jstring(orderState,m_maintMarginChange),

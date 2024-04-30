@@ -35,7 +35,7 @@ min_trade_qty <- ceiling(min_comm / comm_per_shr) + min_visible_size
 
 today_df <- rank_df %>%
   inner_join(margin_df, by = 'symbol') %>%
-   # filter(symbol!="SMCI") %>%
+  filter(stockType!="ETF") %>%
   mutate(
     pos_limit = n_avg_units * round(avgshr)+99,
     margin = pos_limit * price * ipct / 100,
