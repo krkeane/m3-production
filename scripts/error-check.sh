@@ -24,7 +24,6 @@ echo "    filled order " ${fillerr}
 echo ""
 echo ""
 echo ""
-echo "Recent errors  ---------------------"
-grep error ${date}-*.log | sort -k 2 | tail
+grep -C 2 error ${date}*.log | grep " | " | tail -20
 echo ""
 echo ""
