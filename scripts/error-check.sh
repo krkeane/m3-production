@@ -24,6 +24,6 @@ echo "    filled order " ${fillerr}
 echo ""
 echo ""
 echo ""
-grep -C 2 error ${date}*.log | grep " | " | tail -20
+grep -C 2 error ${date}*.log | grep " | "
 echo ""
 echo ""
