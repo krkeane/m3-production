@@ -14,7 +14,7 @@ printf 'cd /opt/pkg/git/minimal-market-maker\n' >> sod-launch.sh
 # 
 while IFS=' ' read -r f1 f2 f3
 do
-	printf '%s%s %-6s %s%s\nsleep 1\n\n' "$fmt" "$f1" "$f2" "$f3" "\" >> $date-$f2.log &" >> sod-launch.sh
+	printf '%s%s U6004887 %-6s %s 100%s\nsleep 1\n\n' "$fmt" "$f1" "$f2" "$f3" "\" >> $date-$f2.log &" >> sod-launch.sh
 done <"$file"
 
 printf "cd ${DATA_DIR}\\n" >> sod-launch.sh
