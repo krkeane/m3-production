@@ -5,8 +5,6 @@ clear
 date=$(date +"%Y%m%d")
 
 cd /opt/pkg/git/minimal-market-maker
-git checkout ira-m3
-mvn clean package install
 
 printf "\n\n\twaiting for start of day...\n\n"
 while [ $(date +%H:%M) != "09:31" ]; do sleep 1; done
