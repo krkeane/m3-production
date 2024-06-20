@@ -5,14 +5,12 @@ clear
 date=$(date +"%Y%m%d")
 
 cd /opt/pkg/git/minimal-market-maker
-git checkout ira-more-aggressive
-mvn clean package install
 
 printf "\n\n\twaiting for start of day...\n\n"
 while [ $(date +%H:%M) != "09:31" ]; do sleep 1; done
 date
 
-mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1001 U19492963 SMCI 100 1" >> ${date}-SMCI.log &
+mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1001 U19492963 SMCI 100 1 6" >> ${date}-SMCI.log &
 sleep 5
 cd -
 
