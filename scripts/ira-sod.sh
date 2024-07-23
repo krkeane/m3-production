@@ -11,7 +11,11 @@ while [ $(date +%H:%M) != "09:31" ]; do sleep 1; done
 date
 
 mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1001 U19492963 SMCI 100 1 6" >> ${date}-SMCI.log &
+sleep 1
+
+mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1002 U19492963 DJT 250 100 6" >> ${date}-SMCI.log &
 sleep 5
+
 cd -
 
 printf "\n\nOKAY TO USE\n\tira-stop.sh\n"
