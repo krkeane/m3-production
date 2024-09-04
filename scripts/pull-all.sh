@@ -16,5 +16,6 @@ echo "mm" && cd mm && git pull && cd -
 echo "tws-data-collector" && cd tws-data-collector && git pull && cd -
 echo "twsToJson" && cd twsToJson && git pull && cd -
 echo "tws-tools" && cd tws-tools && git pull && cd -
+echo "telemetry" && cd telemetry && git pull && cd -
 
 cd /opt/pkg/git/m3-production/scripts

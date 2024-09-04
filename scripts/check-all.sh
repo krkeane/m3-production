@@ -17,6 +17,7 @@ cd mm && echo mm && git status && cd -
 cd tws-data-collector && echo tws-data-collector && git status && cd -
 cd twsToJson && echo twsToJson && git status && cd -
 cd tws-tools && echo tws-tools && git status && cd -
+cd telemetry && echo telemetry && git status && cd -
 
 cd /opt/pkg/git/m3-production/scripts
 
