@@ -1,5 +1,5 @@
 #!/bin/bash 
-set -e
+#set -e
 
 kill `ps | grep java | awk '{print $1}'`
 
