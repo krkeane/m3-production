@@ -17,5 +17,12 @@ echo "tws-data-collector" && cd tws-data-collector && git pull && cd -
 echo "twsToJson" && cd twsToJson && git pull && cd -
 echo "tws-tools" && cd tws-tools && git pull && cd -
 echo "telemetry" && cd telemetry && git pull && cd -
+echo "QuantLib-SWIG" && cd QuantLib-SWIG && git pull origin master \
+        && echo Latest QuantLib-SWIG is `git tag | sort | tail -1` \
+        && cd -
+echo "test-tws-202409" && cd test-tws-202409 && git pull && cd -
+echo "tws-api" && cd tws-api && git pull origin master \
+	&& echo Latest TWS-API is `git tag | sort -n -t '.' -k1,3 | tail -1` \
+	&& cd -
 
 cd /opt/pkg/git/m3-production/scripts
