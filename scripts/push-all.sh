@@ -17,5 +17,7 @@ echo "tws-data-collector" && cd tws-data-collector && git push && cd -
 echo "twsToJson" && cd twsToJson && git push && cd -
 echo "tws-tools" && cd tws-tools && git push && cd -
 echo "telemetry" && cd telemetry && git push && cd -
+echo "test-tws-202409" && cd test-tws-202409 && git push && cd -
+
 
 cd /opt/pkg/git/m3-production/scripts
