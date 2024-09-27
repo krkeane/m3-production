@@ -17,13 +17,13 @@ printf "\n\n\twaiting for start of day...\n\n"
 while [ $(date +%H:%M) != "09:31" ]; do sleep 1; done
 date
 
-mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1001 U19492963 TSLA 115 100 6" >> ${date}-TSLA.log &
+mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1001 U19492963 TSLA 100 100 6" >> ${date}-TSLA.log &
 sleep 1
 
-mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1002 U19492963 SMCI 100 100 6" >> ${date}-SMCI.log &
+mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1002 U19492963 SMCI 125 100 6" >> ${date}-SMCI.log &
 sleep 1
 
-mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1003 U19492963 NVDA 160 100 6" >> ${date}-NVDA.log &
+mvn exec:java -Dexec.mainClass="cc.qpm.app.App" -Dexec.args="1003 U19492963 NVDA 190 100 6" >> ${date}-NVDA.log &
 sleep 1
 
 cd -
