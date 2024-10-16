@@ -1,0 +1,80 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(lubridate)
+library(rjson)
+library(tidyjson)
+library(purrr)
+library(tidyr)
+
+
+load('stats.rda')
+ls()
+
+noshow <- map(ls(),  ~ {
+  cat(sprintf('\n%s\n',.x))
+  get(.x) %>% glimpse()
+})
+```
+\newpage  
+  
+### check for distinct values in high low open close  
+
+```{r}
+trade_df %>% 
+  filter(high!=low) %>% glimpse()
+trade_df %>% 
+  filter(open!=close) %>% glimpse()
+
+```
+\newpage  
+  
+
+```{r fig.width=16/2, fig.height=9/2, results='asis'}
+
+stats_df %>% glimpse()
+
+graph_df <-  stats_df %>%
+  inner_join(
+    stats_df %>% distinct(symbol) #%>% slice_sample(n=10)
+    ,
+    by='symbol'
+  ) %>%
+  mutate(Vn = V*count, VnW = Vn/W) %>%
+  select(symbol,date,VnW) %>% 
+  pivot_longer(cols=-c(symbol,date), values_to = 'value',names_to = 'key') 
+
+graph_df %>%
+  glimpse()
+
+noshow <- graph_df %>% 
+  arrange(symbol,date) %>%
+  group_by(symbol) %>%
+  group_walk(~{
+    
+    g <- .x %>% 
+      ggplot() + aes(x=date,y=value,color=key) +
+      geom_line() + geom_point() + 
+      labs(x='Date',y='Variance',title=.y$symbol) +
+      scale_y_log10(limits=c(10,10000))
+    print(g)
+    .x %>% select(-key) %>% kable(caption = .y$symbol) %>% print()
+    cat('  \n\\newpage  \n  ')
+    
+  }) %>% ungroup()
+
+
+```

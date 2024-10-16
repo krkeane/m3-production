@@ -1,0 +1,79 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(rjson)
+library(tidyjson)
+
+```
+  
+
+```{r read, echo=TRUE}
+trade_df <-
+  fromJSON(file = "data-stats-hist-bars.json")  %>%
+  spread_values(
+    symbol = jstring(sr, symbol),
+    primary = jstring(sr, primary),
+    tradingClass = jstring(sr, tradingClass),
+    barField = jstring(sr, reqBar, whatToShow),
+    barSize =  jstring(sr, reqBar, barSizeSetting),
+    barTime = jstring(bar, m_time),
+    open = jnumber(bar, m_open),
+    high = jnumber(bar, m_high),
+    low = jnumber(bar, m_low),
+    close = jnumber(bar, m_close),
+    volume = jnumber(bar, m_volume),
+    count = jnumber(bar, m_count),
+    wap = jnumber(bar, m_wap)
+  ) %>%
+  as_tibble %>%
+  mutate(barTime = as_datetime(barTime), date = as_date(barTime)) %>%
+  select(-c(document.id, barField, barSize)) %>%
+  filter(tradingClass=='NMS' | tradingClass==symbol) %>%
+  arrange(symbol,barTime)
+
+```
+```{r trade_tbl}
+dates_df <- trade_df %>% summarise(min_date = as_date(min(barTime)),
+                                   max_date = as_date(max(barTime)))
+
+stats_df <- trade_df %>%
+  group_by(symbol, date) %>%
+  group_modify(~ {
+    .x %>% mutate(
+      diff = open - lag(close), # two obs var
+      diff2 = close - lag(open), # (two obs var V) + (two minutes of evol var W)
+      diff3 = (close -open) * (lag(close) - lag(open)) # is there autocorrelation??
+      ) %>%
+      filter(!is.na(diff)) %>%
+      summarise(
+        V = var(diff) / 2,
+        W = max((var(diff2) / 2) - V,V),
+        x_lagx = mean(diff3),
+        sd_sprd = sqrt(V),
+        volume = sum(volume),
+        count = sum(count),
+        avgshr = volume / count,
+        close = last(close)
+      ) 
+  }) %>%
+  ungroup() 
+
+
+
+
+save(trade_df, stats_df, dates_df, file = 'stats.rda')
+
+```
