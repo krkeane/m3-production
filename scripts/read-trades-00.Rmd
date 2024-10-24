@@ -1,0 +1,114 @@
+---
+title: "Read trades"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(xml2)
+
+xml_address <- '/home/user/Downloads/Trade_Confirmation.xml'
+
+xmlList <- as_list(read_xml(xml_address) |> xml_ns_strip())
+
+
+df0 <- xmlList %>% as_tibble() %>%
+  unnest_wider(FlexQueryResponse) %>% 
+  unnest_wider(FlexStatement) %>%
+  unnest_longer(TradeConfirms) 
+df0 %>% count(TradeConfirms_id,sort=TRUE)
+```
+```{r}
+
+df1 <- df0 %>% 
+  filter(TradeConfirms_id=='TradeConfirm') %>%
+  mutate(row=1:n()) %>%
+  group_by(row) %>%
+      group_modify(~ {
+        .x$TradeConfirms[[1]] %>% attributes() %>% stack() %>%
+          rename(key = ind, value = values) %>%
+          filter(value != '', value!='0', value!='0.0') %>%
+          select(key, value)
+      }) %>% ungroup()  %>%
+  pivot_wider(names_from = key, values_from = value) 
+
+df1 %>% glimpse()
+
+df2 <- df1 %>% 
+  select(symbol,tradeDate,buySell,quantity,proceeds,commission,netCash) %>%
+  group_by(symbol,tradeDate) %>%
+  summarise(
+    net_pnl=sum(as.numeric(netCash)), 
+    net_quantity=sum(as.numeric(quantity)),
+    quantity=sum(abs(as.numeric(quantity))),
+    commission=-1*sum(as.numeric(commission)),
+    gross_value=sum(abs(as.numeric(proceeds))),
+            .groups='keep') %>%
+  ungroup() %>%
+  arrange(-gross_value) %>%
+  select(symbol,tradeDate,gross_value,quantity,commission,net_pnl,net_quantity) 
+
+df2 %>%
+  print(n=Inf)
+
+# df0 %>%
+#   glimpse()
+# df0 %>%
+#   group_by(TradeConfirms_id) %>%
+#   group_modify( ~ {
+#     xout <- .x %>%
+#       slice_sample(n = 10) %>%
+#       rowwise() %>%
+#       group_modify(~ {
+#         .x$TradeConfirms[[1]] %>% attributes() %>% stack() %>%
+#           rename(key = ind, value = values) %>%
+#           filter(value != '', value!='0', value!='0.0') %>%
+#           select(key, value)
+#       }) %>% ungroup() 
+#     xout %>% count(key)
+#   }) %>% ungroup() %>%
+#   pivot_wider(values_from = n, names_from = TradeConfirms_id) %>% 
+#   select(key,SymbolSummary,Order,TradeConfirm) %>%
+#   arrange(key) %>% print(n=Inf)
+# 
+# 
+# noshow <- df0 %>%
+#   group_by(TradeConfirms_id) %>%
+#   group_walk( ~ {
+#     .y %>% print()
+#     xout <- .x %>%
+#       mutate(row = 1:n()) %>%
+#       slice_sample(n = 1) %>%
+#       group_by(row) %>%
+#       group_modify(~ {
+#         .x$TradeConfirms[[1]] %>% attributes() %>% stack() %>%
+#           rename(key = ind, value = values) %>%
+#           filter(value != '') %>%
+#           select(key, value)
+#       }) %>% ungroup()
+#     xout %>% glimpse()
+#     xout %>% pivot_wider(values_from = value, names_from = key) %>% glimpse()
+#   }) %>% ungroup()
+
+# df0 %>%
+#   group_by(TradeConfirms_id) %>%
+#   group_walk( ~ {
+#     .y %>% print()
+#     .x %>%
+#       mutate(row = 1:n()) %>%
+#       group_by(row) %>%
+#       group_modify( ~ {
+#         .x$TradeConfirms[[1]] %>% attributes() %>% stack() %>%
+#           rename(key = ind, value = values) %>%
+#           filter(value != '') %>%
+#           select(key, value)
+#       }) %>% ungroup() %>% glimpse() %>% print()
+#     
+#   })
+```
