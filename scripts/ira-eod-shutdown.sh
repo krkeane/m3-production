@@ -1,5 +1,5 @@
 #!/bin/bash 
-set -e
+#set -e
 
 while [ $(date +%H:%M) != "15:57" ]; do sleep 1; done
 date
