@@ -1,0 +1,65 @@
+---
+title: "Read market data"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library(dplyr))
+library(ggplot2)
+suppressMessages(library(lubridate))
+library(rjson)
+library(stringr)
+library(tidyr)
+library(purrr)
+
+load('features.rda')
+
+noshow <- map(ls(), ~ {
+  cat(sprintf('%s\n',.x))
+  get(.x) %>% print()
+})
+
+noshow <- df %>% 
+  filter(key %in% c('bid','ask','vwap')) %>%
+  group_by(symbol) %>%
+    group_walk(~{
+      .title <- .y$symbol
+      g <- .x %>% mutate(row=1:n(),date=date(datetime)) %>% ggplot(aes(x=datetime,y=value,color=key)) + 
+        geom_line() + labs(title=.title,x='Date/Time',y='USD') 
+      print(g)
+    }) %>%
+    ungroup()
+
+df2 <- df %>%
+  filter(key %in% c('open','close','count')) %>%
+  pivot_wider(names_from = 'key', values_from = 'value') %>%
+  mutate(date=date(datetime)) %>%
+  group_by(symbol,date) %>%
+  group_modify(~{
+    .x %>% 
+      arrange(datetime) %>%
+      mutate(xv=open-lag(close),xw=close-lag(open), dx=close-lag(close),dx2=close-lag(close,n=2)) %>%
+      select(datetime,open,close,xv,xw,count,dx,dx2) %>%
+      summarise(V=var(xv,na.rm = TRUE),W=var(xw,na.rm = TRUE),W=W/2-V, ratio=V/W, 
+                count=mean(count), ratio2=sqrt(V)*count/W ,
+                x1var=var(dx,na.rm = TRUE),x2var=var(dx2,na.rm = TRUE), ratio3 = x2var/x1var) 
+  }) %>%
+  ungroup() %>%
+  arrange(symbol,date)
+
+
+df2 %>% 
+  ggplot(aes(x=date,y=ratio,color=symbol)) + geom_point()
+
+df2 %>% 
+  ggplot(aes(x=date,y=ratio2,color=symbol)) + geom_point()
+
+df2 %>% filter(symbol %in% c('ARM','NVDA','SMCI')) %>%
+  ggplot(aes(x=date,y=ratio3,color=symbol)) + geom_point()
+
+```

@@ -1,0 +1,61 @@
+---
+title: "Read market data"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+suppressMessages(library(dplyr))
+suppressMessages(library(lubridate))
+library(rjson)
+library(stringr)
+library(tidyr)
+library(purrr)
+
+
+# bid_ask:  symbol whatToShow m_time   m_open m_close
+#   bid=open ask=close
+json <- fromJSON(file = 'stats-output.json')
+
+df <- tibble(json = json) %>% unnest_wider(json) %>%
+  unnest_wider(sr) %>%
+  unnest_wider(reqBar) %>%
+  select(symbol, whatToShow, bar) %>%
+  unnest_wider(bar) %>%
+  group_by(whatToShow) %>%
+  group_modify( ~ {
+    if (.y$whatToShow == 'BID_ASK') {
+      .x %>% rename(bid = m_open, ask = m_close) %>%
+        mutate(datetime = ymd_hms(str_sub(m_time, 1, 17), tz = 'America/New_York')) %>%
+        select(symbol, datetime, bid, ask) %>% 
+        pivot_longer(col=c(bid,ask),values_to = 'value',names_to = 'key') 
+    }
+    else if (.y$whatToShow == 'OPTION_IMPLIED_VOLATILITY') {
+      .x %>% rename(iv = m_close) %>%
+        mutate(datetime = ymd_hms(str_sub(m_time, 1, 17), tz = 'America/New_York')) %>%
+        select(symbol, datetime, iv) %>% 
+        pivot_longer(col=c(iv),values_to = 'value',names_to = 'key') 
+    }
+    else if (.y$whatToShow == 'TRADES') {
+      .x %>% rename(volume=m_volume, count=m_count,vwap=m_wap,open=m_open,close=m_close) %>%
+        mutate(datetime = ymd_hms(str_sub(m_time, 1, 17), tz = 'America/New_York')) %>%
+        select(symbol, datetime, volume,count,vwap,open,close) %>% 
+        pivot_longer(col=c(volume,count,vwap,open,close),values_to = 'value',names_to = 'key') 
+    }
+  }) %>% ungroup() %>%
+  select(-whatToShow) %>%
+  arrange(symbol,datetime,key)
+
+df 
+
+df %>% count(symbol,key)
+df %>% count(symbol)
+
+save(df,file='features.rda')
+
+
+```
