@@ -1,0 +1,82 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+```
+  
+
+```{r read, results='hide'}
+load('collect.rda')
+
+stats_df_2 <- stats_df %>%
+  group_by(symbol, date) %>%
+  group_modify(~ {
+    .x %>%
+      filter(count > 0) %>%
+      mutate(
+        mid = (bid + ask) / 2,
+        v = (open - lag(close)) / mid,
+        #vv = v+lag(v),
+        w = (wap / mid - 1) / sqrt(count),
+        iv = iv / sqrt(count*252),
+        ww = w + lag(w)
+      ) %>%
+      select(-c('open', 'close', 'volume', 'bid', 'ask')) %>%
+      summarise(
+        V = sd(v, na.rm = TRUE),
+        #       VV=sd(vv,na.rm = TRUE)/sqrt(2),
+        W = sd(w, na.rm = TRUE),
+        #WW = sd(ww, na.rm = TRUE) / sqrt(2),
+        mid=mean(mid,na.rm=TRUE),
+        comm =
+          #  monthly volume 3,000,001 - 20,000,000
+          .0015 +
+          #pmax(0.35/avgshr,.0015) +
+          #  SEC Transaction Fee: USD 0.000008 * Value of Aggregate Sales
+          (mid / 2 * 0.000008) +
+          #  FINRA Trading Activity Fee: USD 0.000145 * Quantity Sold
+          0.000145 +
+          #  NSCC, DTC Fees: USD 0.00020 per share6
+          0.00020,
+        comm = comm / mid,
+        iv = mean(iv,na.rm=TRUE)
+      ) %>% select(-mid)
+  }) %>% ungroup()
+
+stats_df_2 %>% glimpse()
+
+invisible(
+stats_df_2 %>%
+  group_by(symbol) %>%
+  group_walk(~{
+    # .y %>% print()
+    g <- .x %>% 
+      pivot_longer(-date,names_to = 'field', values_to = 'value') %>%
+      mutate(field = factor(field,levels=c('iv','V','W','comm'))) %>%
+      ggplot(aes(x=date,y=value,color=field)) +
+               geom_line() +
+               labs(title=.y$symbol) +
+      scale_y_log10() #limits=c(5e-6,5e-3))
+    
+    print(g)
+  }) %>%
+  ungroup())
+
+
+```
+
+

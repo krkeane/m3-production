@@ -1,0 +1,108 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(purrr)
+library(rjson)
+library(stringr)
+library(tidyr)
+```
+  
+
+```{r}
+load('stats_df.rda')
+
+invisible(map(ls(),  ~ {
+  cat(sprintf('\n%s\n', .x))
+  get(.x) %>% glimpse()
+}))
+
+```
+\newpage
+```{r}
+df2 <- stats_df %>%
+  group_by(symbol, date) %>%
+  group_modify( ~ {
+    .x %>%
+      arrange(datetime) %>%
+      mutate(
+        mid = (bid+ask)/2,
+        ba_sd = sqrt((ask-bid)^2 / 12),
+        z = (wap - mid)/ba_sd,
+        zz = z+lag(z),
+        dv = open - lag(close),
+        dw = close - lag(open),
+        dx = close - lag(close),
+        d2x = close - lag(close, n = 2)
+      ) %>%
+      summarise( z_avg=mean(z), z_sd=sd(z,na.rm=TRUE), zz_sd=sd(zz,na.rm=TRUE)/sqrt(2),
+                 V = var(dv,na.rm = TRUE), W=var(dw,na.rm = TRUE), 
+                 x_var = var(dx,na.rm=TRUE), xx_var = var(d2x,na.rm=TRUE),
+                 count=sum(count),
+                 wt = count * sqrt(V) / W,
+                 iv = mean(iv) ) 
+    
+    
+  }) %>% ungroup()
+
+df2 %>%
+  group_by(symbol) %>%
+  group_walk(~{
+    .y %>% print()
+    .x %>% glimpse()
+  })
+
+df3 <- df2 %>%
+  group_by(symbol) %>%
+  summarise(wt = mean(log(wt))) %>% 
+  ungroup() %>% arrange(-wt)
+
+df3 %>% glimpse()
+
+
+
+df2 %>%
+  mutate(symbol = factor(df2$symbol, levels = df3$symbol)) %>%
+  ggplot() +
+  aes(x = date, y = wt, color = symbol) %>%
+  geom_line() +
+  scale_y_log10()
+
+invisible(df2 %>%
+            group_by(symbol) %>%
+            group_walk( ~ {
+              df <- .x %>%
+                select(-c(wt, count, z_avg)) %>%
+                pivot_longer(-date, names_to = 'field', values_to = 'value') %>%
+                filter(field!='W') %>%
+                mutate(field = factor(field,levels=c(
+                   'xx_var', 'x_var', 'zz_sd','z_sd', 'V', 'W', 'iv'
+                )))
+              g <- df %>%
+                ggplot() +
+                aes(x = date, y = value, color = field) %>%
+                geom_line() +
+                scale_y_log10() +
+                labs(title = .y$symbol)
+              print(g)
+              .x %>%  print()
+            }) %>% ungroup())
+
+stats_df %>% 
+  filter(symbol=='NVDA') %>%
+  mutate(diff=ask-bid, row=1:n()) %>%
+  ggplot() + aes(x=row,y=diff) + geom_line()
+```
+

@@ -1,8 +1,23 @@
 [
   {
-    "endDateTime": "20241014 16:00:00 US/Eastern",
-    "durationStr": "21 D",
+    "endDateTime": "",
+    "durationStr": "63 D",
     "barSizeSetting": "5 mins",
     "whatToShow": "TRADES"
+  },
+  
+  {
+    "endDateTime": "",
+    "durationStr": "63 D",
+    "barSizeSetting": "5 mins",
+    "whatToShow": "BID_ASK"
+  },
+  
+  {
+    "endDateTime": "",
+    "durationStr": "63 D",
+    "barSizeSetting": "5 mins",
+    "whatToShow": "OPTION_IMPLIED_VOLATILITY"
   }
+  
 ]

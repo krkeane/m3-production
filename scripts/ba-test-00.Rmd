@@ -1,0 +1,122 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(rjson)
+library(stringr)
+library(tidyr)
+```
+  
+
+```{r read, echo=TRUE}
+stats_df <- tibble(json = fromJSON(file = "data-ba-test-hist-bars.json")) %>%
+  unnest_wider(json) %>%
+  unnest_wider(sr) %>%
+  unnest_wider(reqBar) %>%
+  select(symbol, whatToShow, barSizeSetting, bar) %>%
+  unnest_wider(bar) %>%
+  mutate(datetime = ymd_hms(m_time, tz = 'America/New_York'),date=date(datetime)) %>%
+  select(-m_time) %>%
+  pivot_longer(
+    cols = c(
+      'm_open',
+      'm_high',
+      'm_low',
+      'm_close',
+      'm_volume',
+      'm_count',
+      'm_wap'
+    ),
+    values_to = 'value',
+    names_to = 'field'
+  ) %>%
+  rename(what=whatToShow,size=barSizeSetting) %>%
+  select(symbol,date,size,datetime,what,field,value) %>%
+  filter(value!=-1) #,!(field %in% c('m_high','m_low'))) 
+
+stats_df %>%
+  glimpse()
+
+stats_df %>%
+  count(symbol,date,size,what) %>% print()
+```
+\newpage
+```{r echo=FALSE}
+stats_df %>%
+  group_by(symbol, size, what) %>%
+  group_walk( ~ {
+    #.y %>% print()
+    n_df <- .x %>% distinct(datetime) %>% arrange(datetime) %>% mutate(row=1:n())
+    g_df <- .x %>% inner_join(n_df,by='datetime')
+    g <- g_df %>%
+      ggplot(aes(x = row, y = value, color = field)) + 
+      geom_line() + 
+      labs(title = sprintf('%s %s %s', .y$symbol, .y$size, .y$what))
+    print(g)
+    g_df %>% 
+      mutate(h = hour(datetime)) %>%
+      group_by(date,h,field) %>%
+      summarise(value=mean(value),.groups = 'keep') %>%
+      ungroup() %>%
+      pivot_wider(names_from = field, values_from = value) %>%
+      glimpse()
+  }) %>% ungroup()
+```
+\newpage
+```{ r}
+noshow <- stats_df %>%
+  group_by(symbol) %>%
+  group_walk(~ {
+    .y %>% print()
+    .x %>%
+      filter(what != 'OPTION_IMPLIED_VOLATILITY' |
+               field == 'm_open') %>%
+      mutate(
+        field =
+          case_when(
+            what == 'BID_ASK' ~
+              case_when(field == 'm_open' ~ 'bid', field == 'm_close' ~ 'ask', .default = field),
+            what == 'OPTION_IMPLIED_VOLATILITY' ~ 'iv',
+            what == 'TRADES' ~ str_sub(field, 3),
+            .default = field
+          )
+      ) %>%
+      select(-what) %>%
+      pivot_wider(names_from = field, values_from = value) %>%
+      glimpse()
+  }) %>% ungroup()
+```
+\newpage
+```{ r}
+stats_df <- stats_df %>%
+  filter(what != 'OPTION_IMPLIED_VOLATILITY' |
+           field == 'm_open') %>%
+  mutate(
+    field =
+      case_when(
+        what == 'BID_ASK' ~ if_else(field == 'm_open', 'bid', 'ask'),
+        what == 'OPTION_IMPLIED_VOLATILITY' ~ 'iv',
+        what == 'TRADES' ~ str_sub(field, 3),
+        .default = field
+      )
+  ) %>%
+  select(-what) %>%
+  pivot_wider(names_from = field, values_from = value)
+
+stats_df %>% glimpse()
+
+save(stats_df, file = 'stats_df.rda')
+```
+

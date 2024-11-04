@@ -1,0 +1,74 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Load JSON file 
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(lubridate)
+library(rjson)
+library(stringr)
+library(tidyr)
+```
+  
+
+```{r read}
+stats_df <- tibble(json = fromJSON(file = "data-hist-bars.json")) %>%
+  unnest_wider(json) %>%
+  unnest_wider(sr) %>%
+  unnest_wider(reqBar) %>%
+  select(symbol, whatToShow, bar) %>%
+  unnest_wider(bar) %>%
+  mutate(datetime = ymd_hms(m_time, tz = 'America/New_York'),
+         date = date(datetime)) %>%
+  select(-m_time) %>%
+  pivot_longer(
+    cols = c(
+      'm_open',
+      'm_high',
+      'm_low',
+      'm_close',
+      'm_volume',
+      'm_count',
+      'm_wap'
+    ),
+    values_to = 'value',
+    names_to = 'field'
+  ) %>%
+  rename(what = whatToShow) %>%
+  select(symbol, date, datetime, what, field, value) %>%
+  filter(value != -1,
+         !(field %in% c('m_high', 'm_low')),
+         !(field %in% c('m_volume', 'm_count', 'm_wap') &
+             what == 'OPTION_IMPLIED_VOLATILITY'),
+         !(field == c('m_close') &
+             what %in% c('BID','ASK','OPTION_IMPLIED_VOLATILITY'))
+         ) %>%
+  mutate(field = 
+           case_when(
+             what == 'BID' ~ 'bid',
+             what == 'ASK' ~ 'ask',
+             what == 'OPTION_IMPLIED_VOLATILITY' ~ 'iv',
+             what == 'TRADES' ~ stringr::str_sub(field,3),
+             .default = field
+           )) %>%
+  select(-what) %>%
+  pivot_wider(names_from = 'field', values_from = 'value') 
+
+stats_df %>%
+  glimpse()
+
+save(stats_df,file='collect.rda')
+
+```
+
+

@@ -1,0 +1,138 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+```
+  
+
+```{r read, results='hide'}
+load('collect.rda')
+
+stats_df_2 <- stats_df %>%
+  group_by(symbol, date) %>%
+  group_modify(~ {
+    .x %>%
+      filter(count > 0) %>%
+      mutate(
+        mid = (bid + ask) / 2,
+        v = (open - lag(close)) / mid,
+        w_1dt = (wap - lag(wap))/mid / sqrt( .5*count + .5*lag(count)),
+        w_2dt = (wap - lag(wap,2))/mid / sqrt( .5*count + lag(count) + .5*lag(count,2))
+      ) %>%
+      select(-c('open', 'close', 'volume')) %>%
+      summarise(
+        count = sum(count,na.rm=TRUE),
+        iv = mean(iv,na.rm=TRUE),
+        bid = mean(bid,na.rm=TRUE),
+        ask = mean(ask,na.rm=TRUE),
+        mid=mean(mid,na.rm=TRUE),
+        V_trades = sd(v, na.rm = TRUE)/sqrt(2),
+        V_binary = sqrt(1/4 * ((bid-ask)/mid)^2),
+        V_uniform = sqrt(1/12 * ((bid-ask)/mid)^2),
+        W_1dt = sd(w_1dt, na.rm = TRUE),
+        W_2dt = sd(w_2dt, na.rm = TRUE),
+        W_iv = iv / sqrt(252*count),
+        qpm = (ask-bid)/mid/2*.63,
+        comm =
+          #  monthly volume 3,000,001 - 20,000,000
+          .0015 +
+          #pmax(0.35/avgshr,.0015) +
+          #  SEC Transaction Fee: USD 0.000008 * Value of Aggregate Sales
+          (mid / 2 * 0.000008) +
+          #  FINRA Trading Activity Fee: USD 0.000145 * Quantity Sold
+          0.000145 +
+          #  NSCC, DTC Fees: USD 0.00020 per share6
+          0.00020,
+        comm = comm / mid
+      ) %>% select(-c(mid,bid,ask,count))
+  }) %>% ungroup()
+
+stats_df_2 %>% glimpse()
+```
+\newpage
+```{r fig.height=4.25}
+
+
+invisible(stats_df_2 %>%
+            select(-c('comm', 'iv')) %>% #,'V_binary')) %>%
+            group_by(symbol) %>%
+            group_walk(~ {
+              # .y %>% print()
+              g_df <- .x %>%
+                pivot_longer(-date, names_to = 'field', values_to = 'value') %>%
+                mutate(field =
+                         factor(
+                           field,
+                           levels = c(
+                             'iv',
+                             'V_binary',
+                             'V_uniform',
+                             'V_trades',
+                             'qpm',
+                             'W_iv',
+                             'W_1dt',
+                             'W_2dt',
+                             'comm'
+                           )
+                         ))
+              g1 <- g_df %>%
+                filter(field %in% c('V_trades', 'W_1dt', 'qpm')) %>%
+                ggplot(aes(x = date, y = value, color = field)) +
+                geom_line(aes(linetype = field)) +
+                labs(title = .y$symbol) +
+              theme(legend.position="bottom") +
+                scale_y_log10()#limits=c(2e-6,2e-2)) 
+              g2 <- g_df %>%
+                filter(field %in% c('V_trades', 'W_1dt', 'qpm')) %>%
+                pivot_wider(values_from = value, names_from = field) %>%
+                rename(V = V_trades, W = W_1dt) %>%
+                mutate(r = (W * W) / (V * V), A = r / 2 * (sqrt(1 + 4 /
+                                                                  r) - 1)) %>%
+                select(date,A) %>%
+                pivot_longer(-date, names_to = 'field', values_to = 'value') %>%
+                mutate(field = factor(field, levels = c('A', 'qpm','V', 'W'))) %>%
+                ggplot(aes(x = date, y = value, color = field)) +
+                geom_line() +
+                labs(title = sprintf('%s - update rate A',.y$symbol)) +
+                theme(legend.position="none") +
+                scale_y_continuous(limits=c(0.25,.75))
+              g3 <- g_df %>%
+                filter(field %in% c('V_binary', 'V_uniform', 'V_trades','qpm')) %>%
+                ggplot(aes(x = date, y = value, color = field)) +
+                geom_line(aes(linetype = field)) +
+                labs(title = sprintf('%s - observation error (sd)',.y$symbol)) +
+                theme(legend.position="bottom") +
+                scale_y_log10()#limits=c(2e-6,2e-2))
+              g4 <- g_df %>%
+                filter(field %in% c('W_iv', 'W_1dt', 'W_2dt')) %>%
+                ggplot(aes(x = date, y = value, color = field)) +
+                geom_line(aes(linetype = field)) +
+                labs(title = sprintf('%s - evolution error (sd)',.y$symbol)) +
+                theme(legend.position="bottom") +
+                scale_y_log10()#limits=c(2e-6,2e-2))
+              
+              print(g3)
+              print(g4)
+              print(g1)
+              print(g2)
+#              cat('  \n  \n')
+            }) %>%
+            ungroup())
+
+```
+
+
