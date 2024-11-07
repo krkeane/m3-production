@@ -62,7 +62,8 @@ stats_df <- tibble(json = fromJSON(file = "data-hist-bars.json")) %>%
              .default = field
            )) %>%
   select(-what) %>%
-  pivot_wider(names_from = 'field', values_from = 'value') 
+  pivot_wider(names_from = 'field', values_from = 'value') %>%
+  filter(date<date(today()))
 
 stats_df %>%
   glimpse()

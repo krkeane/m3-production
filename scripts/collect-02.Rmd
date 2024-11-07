@@ -30,6 +30,10 @@ stats_df_2 <- stats_df %>%
       mutate(
         mid = (bid + ask) / 2,
         v = (open - lag(close)) / mid,
+        # this probably won't catch what we want
+        # ~ 1500 - 2000 trades / minute
+        # any few trade auto-correlation would get buried
+        # ##### 
         w_1dt = (wap - lag(wap))/mid / sqrt( .5*count + .5*lag(count)),
         w_2dt = (wap - lag(wap,2))/mid / sqrt( .5*count + lag(count) + .5*lag(count,2))
       ) %>%
@@ -45,7 +49,11 @@ stats_df_2 <- stats_df %>%
         V_uniform = sqrt(1/12 * ((bid-ask)/mid)^2),
         W_1dt = sd(w_1dt, na.rm = TRUE),
         W_2dt = sd(w_2dt, na.rm = TRUE),
+        
+        ###  this might be too reactive to daily changes in volume
         W_iv = iv / sqrt(252*count),
+        
+        
         qpm = (ask-bid)/mid/2*.63,
         comm =
           #  monthly volume 3,000,001 - 20,000,000
@@ -64,7 +72,7 @@ stats_df_2 <- stats_df %>%
 stats_df_2 %>% glimpse()
 ```
 \newpage
-```{r fig.height=4.25}
+```{r fig.height=4.25, warning=FALSE}
 
 
 invisible(stats_df_2 %>%
@@ -109,7 +117,7 @@ invisible(stats_df_2 %>%
                 geom_line() +
                 labs(title = sprintf('%s - update rate A',.y$symbol)) +
                 theme(legend.position="none") +
-                scale_y_continuous(limits=c(0.25,.75))
+                scale_y_continuous(limits=c(0,1))
               g3 <- g_df %>%
                 filter(field %in% c('V_binary', 'V_uniform', 'V_trades','qpm')) %>%
                 ggplot(aes(x = date, y = value, color = field)) +
