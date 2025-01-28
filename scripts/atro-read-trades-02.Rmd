@@ -1,0 +1,244 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE)
+```
+### QPM LLC executions
+```{r results='hide'}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lubridate)
+library(knitr)
+library(stringr)
+library(xml2)
+
+trade_file_tbl <- tibble(fn=c(
+'/home/user/Downloads/Trade_Confirms_2020.xml',
+'/home/user/Downloads/Trade_Confirms_2021.xml',
+'/home/user/Downloads/Trade_Confirms_2022.xml',
+'/home/user/Downloads/Trade_Confirms_2023.xml',
+'/home/user/Downloads/Trade_Confirms_2024.xml',
+'/home/user/Downloads/Trade_Confirms_2025.xml')
+)
+trade_file_tbl %>% print()
+
+
+df0 <- trade_file_tbl %>% group_by(fn) %>%
+  group_modify( ~ {
+    as_list(read_xml(.y$fn) |> xml_ns_strip()) %>% 
+      as_tibble() %>% 
+      unnest_wider(FlexQueryResponse) %>%
+      unnest_wider(FlexStatement) %>%
+      unnest_longer(TradeConfirms)
+  }) %>% ungroup()
+
+df0 %>%  glimpse()
+
+df0 %>% count(TradeConfirms_id,sort=TRUE)
+```
+```{r results='hide' }
+df1 <- df0 %>% 
+  filter(TradeConfirms_id=='TradeConfirm') %>%
+  mutate(row=1:n()) %>%
+  group_by(row) %>%
+      group_modify(~ {
+        .x$TradeConfirms[[1]] %>% attributes() %>% stack() %>%
+          rename(key = ind, value = values) %>%
+          filter(value != '', value!='0', value!='0.0') %>%
+          select(key, value)
+      }) %>% ungroup()  %>%
+  pivot_wider(names_from = key, values_from = value) 
+
+df1 %>% glimpse()
+
+df1 <- df1 %>%
+  # remove 11/22/2024 treasury overfill resulting in liquidation (subsequently cxld)
+  filter(!str_detect(buySell,'BUY (Ca.)|SELL (Ca.)'),
+         !str_detect(tradeID,'6936118135|6936592373|6936579823|6936580138|6936580560'))
+```
+```{r  results='hide'}
+df2 <- df1 %>%
+  distinct(
+    conid,
+    symbol,
+    description,
+    assetCategory,
+    subCategory,
+    securityID,
+    securityIDType,
+    cusip,
+    isin,
+    figi,
+    listingExchange,
+    underlyingSymbol,
+    issuerCountryCode,
+    multiplier
+  )
+df3 <- df1 %>%
+  select(conid,row,accountId,currency,transactionType,tradeID,orderID,
+  execID,brokerageOrderID,extExecID,orderTime,
+  dateTime,reportDate,settleDate,tradeDate,exchange,buySell,quantity,
+  price,amount,proceeds,netCash,netCashWithBillable,commission,
+  brokerExecutionCommission,thirdPartyExecutionCommission,thirdPartyClearingCommission,
+  thirdPartyRegulatoryCommission,commissionCurrency,code,orderType,levelOfDetail,isAPIOrder)
+  
+df2 %>% distinct(
+    conid,
+    symbol,
+    description,
+    assetCategory,
+    subCategory,
+    multiplier
+) %>% print()
+```
+```{r}
+m_tbl <-  df2 %>% distinct(conid, symbol, description,multiplier) %>%
+    group_by(conid, symbol, description,multiplier) %>%
+    group_modify( ~
+                  {
+                    #.y %>% print()
+                    df3 %>% inner_join(.y %>% select(conid,multiplier)) %>%
+                      mutate(
+                        dateTime = ymd_hms(dateTime),
+                        year = year(dateTime),
+                        month = month(dateTime),
+                        quantity = replace_na(as.numeric(quantity), 0),
+                        price = replace_na(as.numeric(price), 0),
+                        commission = replace_na(as.numeric(commission), 0),
+                        netCash = replace_na(as.numeric(netCash), 0),
+                        multiplier=replace_na(as.numeric(multiplier),1)
+                      ) %>%
+                      select(year,
+                             month,
+                             dateTime,
+                             #tradeID,
+                             exchange,
+                             buySell,
+                             quantity,
+                             price,
+                             commission,
+                             netCash,
+                             multiplier) %>%
+                      arrange(year,month,dateTime) %>%
+                      group_by(year, month) %>%
+                      group_modify( ~ {
+                        #.y %>% print()
+                        .x %>%
+                          group_by(buySell) %>%
+                          summarise(quantity=sum(quantity),netCash=sum(netCash),commission=sum(commission),
+                                    multiplier=max(multiplier),
+                                    price=(netCash-commission)/quantity/multiplier,.groups = 'drop') %>%
+                          select(buySell,quantity,price,commission,netCash) #%>%
+                        #   kable(
+                        #     col.names = c(
+                        #       'Action',
+                        #       'Quantity',
+                        #       'Price',
+                        #       'Commission',
+                        #       'Net Cash'
+                        #     )
+                        #   ) %>% print()
+                        # .x %>%
+                        #   select(-multiplier)%>%
+                        #   kable(
+                        #     col.names = c(
+                        #       'Date Time',
+                        #       'Exchange',
+                        #      #'TradeID',
+                        #       'Action',
+                        #       'Quantity',
+                        #       'Price',
+                        #       'Commission',
+                        #       'Net Cash'
+                        #     )
+                        #   ) %>% print()
+                      }) %>% ungroup()
+                  }) %>%  ungroup() %>%
+  bind_rows(
+tibble(symbol='CMPR',description='CIMPRESS PLC',multiplier='1',year=2020,month=8,buySell='SELL',
+       quantity=-4390,price=-99.556,commission=0,netCash=quantity*price))
+```
+```{r results='hide'}
+## $ conid       <chr> "320227571", "320227571", "4726724", "4726724", "4726724",…
+## $ symbol      <chr> "QQQ", "QQQ", "ATRO", "ATRO", "ATRO", "ATRO", "ATRO", "ATR…
+## $ description <chr> "INVESCO QQQ TRUST SERIES 1", "INVESCO QQQ TRUST SERIES 1"…
+## $ multiplier  <chr> "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1", "1"…
+## $ year        <dbl> 2022, 2022, 2020, 2021, 2021, 2021, 2021, 2021, 2021, 2022…
+## $ month       <dbl> 5, 5, 12, 1, 2, 3, 4, 5, 12, 4, 1, 2, 3, 4, 5, 6, 7, 8, 9,…
+## $ buySell     <chr> "BUY", "SELL", "SELL", "SELL", "SELL", "SELL", "SELL", "SE…
+## $ quantity    <dbl> 281, -281, -4500, -4750, -4750, -5750, -5250, -5000, -1140…
+## $ price       <dbl> -301.25153, -301.95967, -12.46744, -13.65621, -15.31421, -…
+## $ commission  <dbl> -4.000000, -4.469268, -24.275387, -25.748811, -25.637769, …
+## $ netCash     <dbl> -84655.68, 84846.20, 56079.22, 64841.25, 72716.86, 98967.5…
+
+
+df3 %>% count(buySell,sort=TRUE)
+df3 %>% glimpse()
+df3 %>% filter(!(buySell %in% c('BUY','SELL'))) %>% glimpse()
+df3 %>% filter(reportDate=='20241122') %>% glimpse()
+```
+```{r results='asis'}
+invisible(
+  sum_tbl <- m_tbl %>%
+  group_by(description) %>%
+  group_modify( ~ {
+    .x %>%
+      group_by(buySell) %>%
+      summarise(
+        quantity = abs(sum(quantity)),
+        netCash = sum(netCash),
+        commission = sum(commission),
+        multiplier = max(as.numeric(multiplier)),
+        price = abs(netCash - commission) / quantity /
+          multiplier,
+        .groups = 'drop'
+      ) %>%
+      select(buySell, quantity, price, commission, netCash)  }) %>% ungroup())
+
+invisible(sum_tbl %>%
+  group_by(description) %>%
+  group_walk( ~ {
+    .x %>%
+      kable(caption = .y$description,
+            col.names = c('Action','Quantity','Price','Commission','Net Cash'),
+            digits = c(rep(0,2),rep(3,2),0), format.args = list(big.mark = ',')) %>% print()
+  }) %>% ungroup())
+
+```
+\newpage
+```{r results='hide', fig.height=4.25}
+invisible(m_tbl  %>%
+  group_by(conid,symbol,description,multiplier) %>%
+  group_walk(~{
+    df <- .x %>% 
+      mutate(date=ym(sprintf('%d-%d',year,month)),quantity=abs(quantity),
+             price=abs(price)) 
+    df %>%
+      kable(caption = .y$description) %>% print()
+    g <- df %>%
+      ggplot(aes(x = date, y = price, color = buySell)) +
+      geom_point() + geom_line() +
+      scale_y_continuous(limits = c(0, max(df$price))) +
+      scale_x_date(limits = c(ym('2020-8'), today())) +
+      labs(title = .y$description,
+           y = 'Price',
+           x = 'Trade Date')
+    if (nrow(.x) > 3) {
+      h <- (.x %>% 
+mutate(description=.y$description) %>% inner_join(
+        sum_tbl %>% select(buySell, description, price) %>%
+          rename(avg_price = price),
+        by = c('buySell', 'description')
+      ))$avg_price
+      g <- g + geom_hline(yintercept = h) +
+  geom_text(aes(ym('2022-1'),h,label = sprintf('avg %.3f',h),vjust=-1),show.legend=FALSE)
+    }
+    print(g)
+  }) %>% ungroup())
+
+```
