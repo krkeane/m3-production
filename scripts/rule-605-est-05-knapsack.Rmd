@@ -27,7 +27,7 @@ load('trades.rda')
 load('margin.rda')
 
 
-n_avg_units <- 2
+n_avg_units <- 1
 min_comm <- .35
 comm_per_shr <- .0015 # .002 # .001  
 min_visible_size <- 100
@@ -35,16 +35,20 @@ min_trade_qty <- ceiling(min_comm / comm_per_shr) + min_visible_size
 
 today_df <- rank_df %>%
   inner_join(margin_df, by = 'symbol') %>%
+  inner_join(trade_df %>% distinct(symbol,primary),by='symbol') %>%
   filter(stockType!="ETF") %>%
   mutate(
     pos_limit = n_avg_units * round(avgshr)+99,
-    margin = pos_limit * price * ipct / 100,
+    margin = .5 * avgshr * price * ipct / 100,
     adjval = value / margin,
     trading = 'on'
   ) %>%
   arrange(-adjval) %>%
   arrange(-value) %>%
-  filter(margin>0,value>0)
+  filter(margin>0,value>0,count>100000) 
+  #,stockType=='COMMON') 
+  #filter(primary=='NASDAQ')
+
 
 usage <- 0
 orig_equity <- today_df$equity[[1]]
@@ -95,22 +99,36 @@ considered_df <- today_df %>%
 
 today_df <- today_df %>%
   filter(ksack==1) %>%
-  mutate(usage = cumsum(margin)) %>%
+  mutate(usage = cumsum(margin),
+         commfee = 0.0015 + 0.0000278/2*price + 0.000166/2 + .0000405,
+         minoff = 2*commfee,
+         whole = ceiling(minoff*100)/100,
+         half=ceiling((minoff-.005)*100)/100 + .005
+#IBKR 3,000,001 - 20,000,000   0.0015
+#SEC Transaction Fee: USD 0.0000278 * Value of Aggregate Sales
+#FINRA Trading Activity Fee: USD 0.000166 * Quantity Sold
+#FINRA Consolidated Audit Trail Fees: USD 0.000035 * Quantity to 0.000046 * Quantity
+) %>%
   select(
     symbol,
+    primary,
+    stockType,
     sd_sprd,
     price,
+    minoff,
+    whole,
+    half,
     avgshr,
     pos_limit,
     ipct,
     trading,
-    margin,
-    usage,
+    #margin,
+    #usage,
     value,
-    adjval,
+    #adjval,
     rank
-  ) %>%
-  slice_head(n=30) # TWS 32 max - 1 monitor - 1 reserved for emergency eject
+    #,count
+  ) %>%   slice_head(n=30) # TWS 32 max - 1 monitor - 1 reserved for emergency eject
 
 
 hours_df <- margin_df %>% distinct(liquidHours) %>%
@@ -130,14 +148,18 @@ cat(sprintf('  \n### Top market making stocks %s to %s',as.character(dates_df$mi
 # see https://www.interactivebrokers.com/en/pricing/commissions-stocks.php?re=amer
 
 today_df %>%
-  kable(digits = c(0,4,2,0,0,1,0,0,0,0,1,0),
+  select(-c(whole,half,trading)) %>%
+  kable(digits = c(0,0,0,3,2,3,0,0,1,0,0,1),
         format.args = list(big.mark = ','))
 
 today_df %>%
   summarise(value=sum(value)) %>% kable(digits = 0, format.args = list(big.mark=','))
 
 cmdLine_df <- today_df %>%
-  mutate(,clientId=1:n()+1000,cmd =  sprintf('%.0f %s %.0f', clientId, symbol, avgshr))
+  mutate(,clientId=1:n()+1000,cmd =  sprintf('%.0f %s %.0f %.2f %.3f', clientId,
+    symbol, avgshr,whole,half))
+
+save(cmdLine_df,file='cmdLine_df.rda')
 
 
 output <- bind_rows(

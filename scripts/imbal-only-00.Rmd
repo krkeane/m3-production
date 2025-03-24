@@ -1,0 +1,97 @@
+---
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  md_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(rjson)
+library(stringr)
+library(tidyjson)
+library(tidyr)
+```
+
+```{r results='hide'}
+load('trades.rda')
+load('margin.rda')
+load('cmdLine_df.rda')
+# ls()
+# 
+# str(routing_ratio )
+# dates_df %>% glimpse()
+# margin_df %>% glimpse()
+# margin_df %>% 
+#   group_by(stockType) %>%
+#   count(sort=TRUE) 
+# rank_df %>% glimpse()
+# trade_df %>% glimpse()
+# trade_df %>% 
+#    distinct(symbol,primary) %>%
+#   group_by(primary) %>%
+#    count(sort = TRUE) %>% 
+#    glimpse()
+
+cmdLine_df %>% glimpse()
+io_df <- cmdLine_df %>%
+  inner_join(trade_df %>% distinct(symbol,primary),by='symbol') %>%
+  inner_join(margin_df %>% select(symbol,stockType,ipct),by='symbol') %>%
+  #filter(primary=='NASDAQ',stockType=='COMMON') %>%
+  select(symbol,pos_limit,price,primary,stockType) %>% 
+  mutate(buy_lmt=price*1.1, sell_lmt=price*.9)
+
+cmd_df <- io_df %>%
+  slice(sample(1:n())) %>%
+  mutate(row=1:n()) %>%
+  group_by(row) %>%
+  group_modify(~{
+    b_cmd <- sprintf('BUY %.0f %s LMT %.2f OPG',.x$pos_limit,.x$symbol,.x$buy_lmt)
+    s_cmd <- sprintf('SELL %.0f %s LMT %.2f OPG',.x$pos_limit,.x$symbol,.x$sell_lmt)
+    df <- tibble(symbol=c(.x$symbol,.x$symbol),cmd=c(b_cmd,s_cmd),order=c(0,1))
+    df[sample(nrow(df)),]
+  }) %>%
+  ungroup() %>%
+  filter(order==row %% 2) %>%
+  inner_join(cmdLine_df %>% select(symbol,rank),by='symbol') %>%
+  arrange(row)
+```
+```{r}
+io_df %>% kable()
+cmd_df %>% print()
+write(cmd_df$cmd,file='io.cmd')
+
+
+```
+```{r comment='',echo=FALSE}
+cat(readLines('io.cmd'), sep = '\n')
+```
+\newpage
+```{r}
+rank_df %>% 
+  inner_join(trade_df %>% distinct(symbol,primary),by='symbol') %>%
+  inner_join(margin_df %>% select(symbol,ipct),by='symbol') %>%
+  filter(primary=='NASDAQ') %>%
+  slice_head(n=10) %>%
+  print()
+
+```
+```{r}
+rank_df %>% 
+  inner_join(trade_df %>% distinct(symbol,primary),by='symbol') %>%
+  inner_join(margin_df %>% select(symbol,stockType,ipct),by='symbol') %>%
+  filter(primary=='NASDAQ',stockType=='COMMON') %>%
+  select(-c(primary,stockType)) %>%
+  arrange(-count) %>%
+  slice_head(n=10) %>%
+  print()
+
+```
