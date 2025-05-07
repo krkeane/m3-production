@@ -45,9 +45,9 @@ today_df <- rank_df %>%
   ) %>%
   arrange(-adjval) %>%
   arrange(-value) %>%
-  filter(margin>0,value>0,count>100000) 
+  filter(margin>0,value>0,count>100000
   #,stockType=='COMMON') 
-  #filter(primary=='NASDAQ')
+  ,primary=='NASDAQ')
 
 
 usage <- 0
