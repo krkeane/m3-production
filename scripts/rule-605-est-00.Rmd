@@ -89,7 +89,7 @@ rank_df %>%
   kable(
     col.names = c('','Symbol','Avg shares','Close','Obs sd','Comm','Count','Volume','Alpha','Score'),
     caption = sprintf(
-      'Top market making stocks %s to %s',
+      'Top scoring stocks %s to %s',
       as.character(dates_df$min_date),
       as.character(dates_df$max_date)
     ),
@@ -108,7 +108,26 @@ rank_df %>%
   kable(
     col.names = c('','Symbol','Avg shares','Close','Obs sd','Comm','Count','Volume','Alpha','Score'),
     caption = sprintf(
-      'Top market making stocks %s to %s',
+      '(alpha sort) Top market making stocks %s to %s',
+      as.character(dates_df$min_date),
+      as.character(dates_df$max_date)
+    ),
+    digits = c(rep(0, 3),2,rep(4, 2), rep(0,3),4),
+    format.args = list(big.mark = ',')
+  ) %>% print()
+
+rank_df %>%
+  filter(rank <= 20) %>%
+  # arrange(rank) %>%
+  mutate(score = value/close/350 ) %>%
+  arrange(-score) %>%
+  slice_head(n=11) %>%
+  #arrange(symbol) %>%
+  select(rank, symbol, avgshr, close, sd_sprd, comm, count, volume, value,score) %>%
+  kable(
+    col.names = c('','Symbol','Avg shares','Close','Obs sd','Comm','Count','Volume','Alpha','Score'),
+    caption = sprintf(
+      '(350 limit) Top market making stocks %s to %s',
       as.character(dates_df$min_date),
       as.character(dates_df$max_date)
     ),
@@ -136,4 +155,7 @@ rank_df %>%
     format.args = list(big.mark = ',')
   ) %>% print()
 
+```
+```{r}
+rank_df %>% glimpse()
 ```

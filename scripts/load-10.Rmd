@@ -1,0 +1,103 @@
+---
+title: "SEC rule 605 file"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+rpt_digits <- 3
+```
+
+```{r load}
+library(dplyr)
+library(knitr)
+library(lubridate)
+library(tidyr)
+library(ggplot2)
+
+load('rule605.rda')
+
+data %>% glimpse()
+
+
+score_df <- data %>%   group_by(symbol) %>%
+  filter(size=='21') %>%
+  summarise(mu=mean(ars), sd=sd(ars), .groups = 'drop') %>%
+  arrange(-mu/sd) %>%
+  slice_head(n=20)
+score_df %>% print()
+
+df <- data %>%   group_by(symbol, month) %>%
+  filter(size=='21') %>%
+  summarise(
+    ars_sprd = sum(orders * ars),
+    cus_sprd = sum(orders * aes),
+    mkt_sprd = sum(filled * aes + impr_shr * impr_amnt * 2),
+    filled = sum(filled),
+    orders = sum(orders),
+    ars = ars_sprd / orders,
+    aes = cus_sprd / orders,
+    mes = mkt_sprd / filled,
+    value = (aes / 2 - .0035) * filled, # hoping for half-spread less cost
+    ratio = aes / mes,
+    .groups = 'drop'
+  )
+bind_rows(
+  slice_max(
+    df %>%
+      filter(month == '202504') ,
+    order_by = ars_sprd,
+    n = 10
+  ),
+  slice_min(
+    df %>%
+      filter(month == '202504') ,
+    order_by = ars_sprd,
+    n = 10
+  )
+) %>% print(n = Inf)
+
+```
+\newpage
+```{r}
+recent_df <- df %>% distinct(month) %>% arrange(month) %>% 
+  slice_tail(n=12)
+recent_df
+
+top_df <- df %>%
+  filter(month %in% recent_df$month) %>% 
+  group_by(symbol) %>%
+  summarise(value=sum(value),.groups = 'drop') %>% 
+    arrange(-value) %>% select(symbol) %>%
+    slice_head(n=20)
+top_df %>% print()
+```
+\newpage
+```{r results='asis'}
+invisible(df %>%
+            filter(symbol %in% top_df$symbol,month %in% recent_df$month) %>%
+            group_by(symbol) %>%
+            group_walk( ~ {
+              cat('\n\n\\newpage  \n')
+              
+              tmp_df <- .x %>% arrange(desc(month)) %>%
+                mutate(date=ym(month))
+              #tmp_df %>% print()
+              
+              # tmp_df %>% 
+              #   select(month,date,ars,aes,mes,filled) %>% print()
+              
+              
+              g <- tmp_df %>%
+                select(date,ars,aes,mes) %>%
+                pivot_longer(-date,names_to = 'key',values_to = 'value') %>%
+                ggplot() + aes(x=date,y=value,color=key) + 
+                geom_line() + geom_point() + labs(title=.y$symbol) + 
+                geom_hline(aes(yintercept=0))
+              print(g)
+              
+              
+            }))
+```

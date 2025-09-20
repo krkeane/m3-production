@@ -36,7 +36,7 @@ min_trade_qty <- ceiling(min_comm / comm_per_shr) + min_visible_size
 today_df <- rank_df %>%
   inner_join(margin_df, by = 'symbol') %>%
   inner_join(trade_df %>% distinct(symbol,primary),by='symbol') %>%
-  filter(stockType!="ETF") %>%
+  #filter(stockType!="ETF") %>%
   mutate(
     pos_limit = n_avg_units * round(avgshr)+99,
     margin = .5 * avgshr * price * ipct / 100,
@@ -46,8 +46,11 @@ today_df <- rank_df %>%
   arrange(-adjval) %>%
   arrange(-value) %>%
   filter(margin>0,value>0,count>100000
-  #,stockType=='COMMON') 
-  ,primary=='NASDAQ')
+  ,primary=='NASDAQ'
+#  ,stockType=='COMMON'
+  #,stockType!='ETF'
+  #,stockType!='ADR'
+  )
 
 
 usage <- 0
@@ -156,7 +159,7 @@ today_df %>%
   summarise(value=sum(value)) %>% kable(digits = 0, format.args = list(big.mark=','))
 
 cmdLine_df <- today_df %>%
-  mutate(,clientId=1:n()+1000,cmd =  sprintf('%.0f %s %.0f %.2f %.3f', clientId,
+  mutate(clientId=1:n()+1000,cmd =  sprintf('%.0f %s %.0f %.2f %.3f', clientId,
     symbol, avgshr,whole,half))
 
 save(cmdLine_df,file='cmdLine_df.rda')

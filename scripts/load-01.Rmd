@@ -20,10 +20,10 @@ library(tidyr)
 rule_605_cols <- c(
   'f01', 'market', 'month', 'symbol', 'type', 'size', 'orders', 'shares',
   'cxld', 'filled', 'away', 'f12', 'f13', 'f14', 'f15', 'f16', 'ars', 'aes',
-  'impr_shr', 'impr_amnt', 'impr_t', 'f22', 'f23', 'f24', 'f25', 'f26'
+  'impr_shr', 'impr_amnt', 'impr_t', 'f22', 'f23', 'f24', 'f25', 'f26','ars'
 )
 rule_605_col_drop <- c(
-  'market','cxld','ars','away','impr_t',
+  'market','cxld','away','impr_t',
   'f01','f12', 'f13', 'f14', 'f15', 'f16','f22', 'f23', 'f24', 'f25', 'f26'
 )
 
