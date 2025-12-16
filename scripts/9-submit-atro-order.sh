@@ -3,10 +3,11 @@
 set -e
 
 date=$(date +"%Y%m%d")
-clear
+#clear
 
-printf "\n\n\tATRO daily order entry\n\n\twaiting for 09:30 ...\n\n"
-while [ $(date +%H:%M) != "09:30" ]; do sleep 1; done
+# printf "\n\n\tATRO daily order entry\n\n\twaiting for 09:30 ...\n\n"
+# while [ $(date +%H:%M) != "09:30" ]; do sleep 1; done
+# while [ $(date +%H:%M) != "14:00" ]; do sleep 1; done
 date
 
 

@@ -1,7 +1,7 @@
 #!/bin/bash 
 set -e
 
-while [ $(date +%H:%M) != "15:57" ]; do sleep 1; done
+while [ $(date +%H:%M) != "12:57" ]; do sleep 1; done
 date
 
 kill `ps | grep java | awk '{print $1}'`

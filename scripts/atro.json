@@ -3,9 +3,9 @@
     "port": 7596,
     "client": 801,
     "action": "SELL",
-    "qty": 2500,
+    "qty": 2133,
     "symbol": "ATRO",
     "lmt": [
-        43.49
+        54
     ]
 }
