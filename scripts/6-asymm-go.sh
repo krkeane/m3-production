@@ -7,7 +7,7 @@ file="${DATA_DIR}/${date}.cmd"
 fmt="mvn exec:java -Dexec.mainClass=\"cc.qpm.trading.asymmetric.App\" -Dexec.args=\"" 
 
 printf '#!/bin/bash\nset -e\n\n' > sod-launch.sh
-printf 'while [ $(date +%%H:%%M) != \"09:31\" ]; do sleep 1; done\ndate\n\n' >> sod-launch.sh
+printf 'while [ $(date +%%H:%%M) != \"09:35\" ]; do sleep 1; done\ndate\n\n' >> sod-launch.sh
 printf 'cd /opt/pkg/git/trading/asymmetric-mm\n' >> sod-launch.sh
 #
 # Each input line divided into three fields separated by a space character
